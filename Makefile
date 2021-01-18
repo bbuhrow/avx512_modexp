@@ -46,17 +46,17 @@
 
 
 #--------------------------- flags -------------------------
-CC = icc
+CC = gcc
 #CFLAGS = -g -march=core2 -mtune=core2
 #CFLAGS = -static
 #CFLAGS = -S -fsource-asm
 WARN_FLAGS = -Wall #-W -Wconversion
-OPT_FLAGS = -O3
+OPT_FLAGS = -O2
 INC = -I. 
 LIBS =
 BINNAME = phimodexp
-CFLAGS += -I/sppdg/scratch/buhrow/projects/gmp-6.0.0a/install/include/ 
-CFLAGS += -L/sppdg/scratch/buhrow/projects/gmp-6.0.0a/install/lib/
+CFLAGS += -I../gmp-6.1.2/include/ 
+CFLAGS += -L../gmp-6.1.2/lib/ 
 
 #--------------------------- make options -------------------------
 
@@ -83,7 +83,6 @@ endif
 ifdef MAXBITS
 	CFLAGS += -DMAXBITS=$(MAXBITS)
 endif
-
 
 ifeq ($(KNL),1)
     ifeq ($(COMPILER),gcc)

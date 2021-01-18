@@ -58,17 +58,20 @@ This file is a snapshot of a work in progress, originated by Mayo
 // ============================================================================
 // vecarith config
 // ============================================================================
-#define base_t uint32_t
 #define DIGITBITS 32
+#define base_t uint32_t
+#define base_signed_t int32_t
+#define HALFBITS 16
+#define HALFMASK 0xffff
+#define MAXDIGIT 0xffffffff
+#define HIBITMASK 0x80000000
 #define VECLEN 16
+
 #ifndef MAXBITS
 #define MAXBITS 512
 #endif
 #define NWORDS (MAXBITS / DIGITBITS)
-#define HALFBITS 16
-#define HALFMASK 0xffff
-#define MAXDIGIT 0xffffffffULL
-#define HIBITMASK 0x80000000ULL
+#define DEFINED 1
 #define MAX_WINSIZE 8
 
 // ============================================================================
@@ -79,9 +82,7 @@ This file is a snapshot of a work in progress, originated by Mayo
 #define SIGN(a) ((a) < 0 ? -1 : 1)
 
 #define INV_2_POW_48 3.5527136788005009293556213378906e-15
-#define INV_2_POW_52 2.2204460492503130808472633361816e-16
 #define INV_2_POW_64 5.4210108624275221700372640043497e-20
-#define INV_2_POW_26 1.490116119384765625e-8
 #define INV_2_POW_32 2.3283064365386962890625e-10
 #define PI 3.1415926535897932384626433832795
 #define LN2 0.69314718055994530941723212145818
@@ -207,14 +208,18 @@ typedef struct
 monty* monty_alloc(void);
 void monty_free(monty *mdata); 
 void monty_init_vec(monty *mdata, bignum * n, int verbose);
-int vec_montgomery_setup(bignum * a, bignum *r, bignum *rhat, base_t *rho);
 int get_winsize(void);
-void montvecadd(bignum *a, bignum *b, bignum *c, bignum *n);
-void montvecsub(bignum *a, bignum *b, bignum *c, bignum *n);
+// 32-bit words, 16x
+int vec_montgomery_setup(bignum * a, bignum *r, bignum *rhat, base_t *rho);
 void vecmulmod(bignum *a, bignum *b, bignum *c, bignum *n, bignum *s, monty *mdata);
 void vecsqrmod(bignum *a, bignum *c, bignum *n, bignum *s, monty *mdata);
 void vecmodexp(bignum *d, bignum *b, bignum *e, bignum *m,
     bignum *s, bignum *one, monty *mdata);
+
+void(*vecmulmod_ptr)(bignum *, bignum *, bignum *, bignum *, bignum *, monty *);
+void(*vecsqrmod_ptr)(bignum *, bignum *, bignum *, bignum *, monty *);
+int(*montsetup_ptr)(bignum *, bignum *, bignum *, base_t *);
+void(*vecmodexp_ptr)(bignum *, bignum *, bignum *, bignum *, bignum *, bignum *, monty *m);
 
 // ============================================================================
 // vector bignum arithmetic and conversions
@@ -230,9 +235,155 @@ void insert_bignum_in_vec(bignum *src, bignum *vec_dest, int num);
 void extract_bignum_from_vec(bignum *vec_src, bignum *dest, int num);
 void copy_vec_lane(bignum *src, bignum *dest, int num, int size);
 uint32_t vec_gte(bignum * u, bignum * v);
+uint32_t vec_mask_gte(uint32_t mask, bignum* u, bignum* v);
 uint32_t vec_eq(base_t * u, base_t * v, int sz);
 uint32_t vec_bignum_mask_lshift_1(bignum * u, uint32_t wmask);
 void vec_bignum_mask_rshift_1(bignum * u, uint32_t wmask);
 void vec_bignum_mask_sub(bignum *a, bignum *b, bignum *c, uint32_t wmask);
+
+// ---------------------------------------------------------------------
+// emulated instructions
+// ---------------------------------------------------------------------
+__m512i __inline _mm512_mulhi_epu32(__m512i a, __m512i b)
+{
+    __m512i t1 = _mm512_shuffle_epi32(a, 0xB1);
+    __m512i t2 = _mm512_shuffle_epi32(b, 0xB1);
+    __m512i evens = _mm512_mul_epu32(a, b);
+    __m512i odds = _mm512_mul_epu32(t1, t2);
+    //return _mm512_mask_mov_epi32(_mm512_shuffle_epi32(evens, 0xB1), 0xaaaa, odds);
+    return _mm512_mask_mov_epi32(odds, 0x5555, _mm512_shuffle_epi32(evens, 0xB1));
+}
+
+__m512i __inline _mm512_mask_adc_epi32(__m512i a, __mmask16 m, __mmask16 c, __m512i b, __mmask16 *cout)
+{
+    __m512i t = _mm512_add_epi32(a, b);
+    *cout = _mm512_cmplt_epu32_mask(t, a);
+    __m512i t2 = _mm512_mask_add_epi32(a, m, t, _mm512_maskz_set1_epi32(c, 1));
+    *cout = _mm512_kor(*cout, _mm512_mask_cmplt_epu32_mask(m, t2, t));
+    return t2;
+}
+
+__m512i __inline _mm512_adc_epi32_test1(__m512i a, __mmask16 c, __m512i b, __mmask16 *cout)
+{
+    __m512i t = _mm512_add_epi32(a, b);
+    *cout = _mm512_cmplt_epu32_mask(t, a);
+    __m512i t2 = _mm512_add_epi32(t, _mm512_maskz_set1_epi32(c, 1));
+    *cout = _mm512_kor(*cout, _mm512_cmplt_epu32_mask(t2, t));
+    return t2;
+}
+
+__m512i __inline _mm512_adc_epi32_test2(__m512i a, __mmask16 c, __m512i b, __mmask16 *cout)
+{
+    // looks like a slightly improved data dependency chain... 
+    // but it tested slower for 1024-b inputs...
+    __m512i t = _mm512_add_epi32(a, b);
+    __mmask16 gt0 = _mm512_kor(_mm512_test_epi32_mask(b, b), c);
+
+    t = _mm512_add_epi32(t, _mm512_maskz_set1_epi32(c, 1));
+    *cout = _mm512_kand(_mm512_cmple_epu32_mask(t, a), gt0);
+    return t;
+}
+
+__m512i __inline _mm512_adc_epi32(__m512i a, __mmask16 c, __m512i b, __mmask16 *cout)
+{
+    __m512i t = _mm512_add_epi32(a, b);
+    t = _mm512_add_epi32(t, _mm512_maskz_set1_epi32(c, 1));
+    *cout = _mm512_cmplt_epu32_mask(t, a) | (_mm512_cmpeq_epu32_mask(t, a) & c);
+    return t;
+}
+
+__m512i __inline _mm512_addcarry_epi32(__m512i a, __mmask16 c, __mmask16 *cout)
+{
+    __m512i t = _mm512_add_epi32(a, _mm512_maskz_set1_epi32(c, 1));
+    *cout = _mm512_cmplt_epu32_mask(t, a);
+    return t;
+}
+
+__m512i __inline _mm512_subborrow_epi32(__m512i a, __mmask16 c, __mmask16 *cout)
+{
+    __m512i t = _mm512_sub_epi32(a, _mm512_maskz_set1_epi32(c, 1));
+    *cout = _mm512_cmpeq_epu32_mask(a, _mm512_setzero_epi32());
+    return t;
+}
+
+__m512i __inline _mm512_mask_sbb_epi32(__m512i a, __mmask16 m, __mmask16 c, __m512i b, __mmask16 *cout)
+{
+    __m512i t = _mm512_sub_epi32(a, b);
+    *cout = _mm512_mask_cmpgt_epu32_mask(m, t, a);
+    __m512i t2 = _mm512_mask_sub_epi32(a, m, t, _mm512_maskz_set1_epi32(c, 1));
+    *cout = _mm512_kor(*cout, _mm512_mask_cmpgt_epu32_mask(m, t2, t));
+    return t2;
+}
+
+__m512i __inline _mm512_sbb_epi32(__m512i a, __mmask16 c, __m512i b, __mmask16 *cout)
+{
+    __m512i t = _mm512_sub_epi32(a, b);
+    *cout = _mm512_cmpgt_epu32_mask(t, a);
+    __m512i t2 = _mm512_sub_epi32(t, _mm512_maskz_set1_epi32(c, 1));
+    *cout = _mm512_kor(*cout, _mm512_cmpgt_epu32_mask(t2, t));
+    return t2;
+}
+
+__m512i __inline _mm512_sbb_epi64(__m512i a, __mmask8 c, __m512i b, __mmask8 *cout)
+{
+    __m512i t = _mm512_sub_epi64(a, b);
+    *cout = _mm512_cmpgt_epu64_mask(t, a);
+    __m512i t2 = _mm512_sub_epi64(t, _mm512_maskz_set1_epi64(c, 1));
+    *cout = _mm512_kor(*cout, _mm512_cmpgt_epu64_mask(t2, t));
+    return t2;
+}
+
+__m512i __inline _mm512_addsetc_epi32(__m512i a, __m512i b, __mmask16 *cout)
+{
+    __m512i t = _mm512_add_epi32(a, b);
+    *cout = _mm512_cmplt_epu32_mask(t, a);
+    return t;
+}
+
+__m512i __inline _mm512_subsetc_epi32(__m512i a, __m512i b, __mmask16 *cout)
+{
+    __m512i t = _mm512_sub_epi32(a, b);
+    *cout = _mm512_cmpgt_epu32_mask(b, a);
+    return t;
+}
+
+__inline void _mm512_epi32_to_eo64(__m512i a, __m512i *e64, __m512i *o64)
+{
+    *e64 = _mm512_maskz_mov_epi32(0x5555, a);
+    *o64 = _mm512_maskz_mov_epi32(0x5555, _mm512_shuffle_epi32(a, 0xB1));
+    return;
+}
+
+__inline __m512i _mm512_eo64lo_to_epi32(__m512i e64, __m512i o64)
+{
+    return _mm512_mask_blend_epi32(0xAAAA, e64, _mm512_shuffle_epi32(o64, 0xB1));
+}
+
+__inline __m512i _mm512_eo64hi_to_epi32(__m512i e64, __m512i o64)
+{
+    return _mm512_mask_blend_epi32(0xAAAA, _mm512_shuffle_epi32(e64, 0xB1), o64);
+}
+
+__inline void _mm512_mul_eo64_epi32(__m512i a, __m512i b, __m512i *e64, __m512i *o64)
+{
+    // multiply the 16-element 32-bit vectors a and b to produce two 8-element
+    // 64-bit vector products e64 and o64, where e64 is the even elements
+    // of a*b and o64 is the odd elements of a*b
+    //__m512i t1 = _mm512_shuffle_epi32(a, 0xB1);
+    //__m512i t2 = _mm512_shuffle_epi32(b, 0xB1);
+
+    //_mm512_shuffle_epi32(a, 0xB1);
+    //_mm512_shuffle_epi32(b, 0xB1);
+    *e64 = _mm512_mul_epu32(a, b);
+    *o64 = _mm512_mul_epu32(_mm512_shuffle_epi32(a, 0xB1), _mm512_shuffle_epi32(b, 0xB1));
+
+    return;
+}
+
+#define _mm512_iseven_epi32(x) \
+    _mm512_cmp_epi32_mask(_mm512_setzero_epi32(), _mm512_and_epi32((x), _mm512_set1_epi32(1)), _MM_CMPINT_EQ)
+
+#define _mm512_isodd_epi32(x) \
+    _mm512_cmp_epi32_mask(_mm512_set1_epi32(1), _mm512_and_epi32((x), _mm512_set1_epi32(1)), _MM_CMPINT_EQ)
 
 
