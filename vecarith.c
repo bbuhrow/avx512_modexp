@@ -141,8 +141,8 @@ This file is a snapshot of a work in progress, originated by Mayo
 #define BLOCKWORDS 4
 #define NBLOCKS (NWORDS / BLOCKWORDS)
 
-// _bps
-void vecmulmod(bignum *a, bignum *b, bignum *c, bignum *n, bignum *s, monty *mdata)
+
+void vecmulmod_bps(bignum *a, bignum *b, bignum *c, bignum *n, bignum *s, monty *mdata)
 {
     int i, j, k;
 
@@ -168,8 +168,6 @@ void vecmulmod(bignum *a, bignum *b, bignum *c, bignum *n, bignum *s, monty *mda
 
     __mmask8 scarry_e1 = 0;
     __mmask8 scarry_o1 = 0;
-    __mmask8 scarry_e = 0;
-    __mmask8 scarry_o = 0;
     __mmask16 scarry2;
     __mmask16 scarry;
 
@@ -799,8 +797,7 @@ void vecmulmod(bignum *a, bignum *b, bignum *c, bignum *n, bignum *s, monty *mda
     return;
 }
 
-// _bps
-void vecsqrmod(bignum* a, bignum* c, bignum* n, bignum* s, monty* mdata)
+void vecsqrmod_bps(bignum* a, bignum* c, bignum* n, bignum* s, monty* mdata)
 {
     int i, j, k;
     bignum* b = a;
@@ -830,8 +827,6 @@ void vecsqrmod(bignum* a, bignum* c, bignum* n, bignum* s, monty* mdata)
 
     __mmask8 scarry_e1 = 0;
     __mmask8 scarry_o1 = 0;
-    __mmask8 scarry_e = 0;
-    __mmask8 scarry_o = 0;
     __mmask16 scarry2;
     __mmask16 scarry;
 
@@ -1807,11 +1802,10 @@ void vecsqrmod(bignum* a, bignum* c, bignum* n, bignum* s, monty* mdata)
     c->size = NWORDS;
     return;
 }
-
 //_fips
-void vecmulmod_fips(bignum* a, bignum* b, bignum* c, bignum* n, bignum* s, monty* mdata)
+void vecmulmod(bignum* a, bignum* b, bignum* c, bignum* n, bignum* s, monty* mdata)
 {
-    int i, j, k;
+    int i, j;
 
     __m512i a0, b0, s0, n0;
     __m512i te0, te1;
@@ -1944,12 +1938,12 @@ void vecmulmod_fips(bignum* a, bignum* b, bignum* c, bignum* n, bignum* s, monty
     return;
 }
 
-void vecsqrmod_fips(bignum* a, bignum* c, bignum* n, bignum* s, monty* mdata)
+void vecsqrmod(bignum* a, bignum* c, bignum* n, bignum* s, monty* mdata)
 {
-    int i, j, k;
+    int i, j;
     bignum* b = a;
 
-    __m512i a0, b0, s0, n0;
+    __m512i a0, b0;
     __m512i te0, te1;
     __m512i to0, to1;
 
@@ -1963,7 +1957,6 @@ void vecsqrmod_fips(bignum* a, bignum* c, bignum* n, bignum* s, monty* mdata)
     __m512i nhatvec_o = _mm512_shuffle_epi32(nhatvec_e, 0xB1);;
 
     __m512i prod1;
-    __m512i prod2;
 
     __m512i prod1_e;
     __m512i prod1_o;
@@ -1973,7 +1966,6 @@ void vecsqrmod_fips(bignum* a, bignum* c, bignum* n, bignum* s, monty* mdata)
     __m512i zero = _mm512_set1_epi64(0);
 
     __mmask8 scarry_1 = 0;
-    __mmask8 scarry_2 = 0;
     __mmask8 scarry_e1 = 0;
     __mmask8 scarry_o1 = 0;
     __mmask16 scarry2;
@@ -2243,11 +2235,9 @@ void vecmodexp(bignum *d, bignum *b, bignum *e, bignum *m,
     // the bit string length.  needs to divide the word size (e.g., 32);
     int k = get_winsize();
     int mask;
-    int nsqr, nmul;
     int bstr[VECLEN];
     uint8_t done[256];
 
-    bignum *t = mdata->mtmp3;
     bignum **g = mdata->g;
     bignum *w = mdata->mtmp4;
 
@@ -2431,7 +2421,6 @@ uint32_t vec_bignum_mask_lshift_1(bignum * u, uint32_t wmask)
     int i;
     __m512i nextcarry;
     __m512i carry = _mm512_setzero_epi32();
-    __m512i highmask = _mm512_set1_epi32(0x80000000);
     __m512i word;
 
     for (i = 0; i < NWORDS; i++)
@@ -2522,7 +2511,7 @@ int vec_montgomery_setup(bignum * a, bignum *r, bignum *rhat, base_t *rho)
     __m512i x, b;
     __m512i four = _mm512_set1_epi32(4);
     __m512i two = _mm512_set1_epi32(2);
-    int i, j, k, bits, num = 0;
+    int i, k, bits;
     uint32_t m1, m2;
     uint32_t barray[VECLEN];
     // fast inversion mod 2**k assuming odd integer input 'a'

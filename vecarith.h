@@ -58,6 +58,17 @@ This file is a snapshot of a work in progress, originated by Mayo
 // ============================================================================
 // vecarith config
 // ============================================================================
+#ifdef BASE52
+#define DIGITBITS 52
+#define base_t uint64_t
+#define base_signed_t int64_t
+// for 52-bit radix
+#define HALFBITS 26
+#define HALFMASK 0x3ffffff
+#define MAXDIGIT 0xfffffffffffffULL
+#define HIBITMASK 0x8000000000000ULL
+#define VECLEN 8
+#else
 #define DIGITBITS 32
 #define base_t uint32_t
 #define base_signed_t int32_t
@@ -66,6 +77,7 @@ This file is a snapshot of a work in progress, originated by Mayo
 #define MAXDIGIT 0xffffffff
 #define HIBITMASK 0x80000000
 #define VECLEN 16
+#endif
 
 #ifndef MAXBITS
 #define MAXBITS 512
@@ -82,7 +94,9 @@ This file is a snapshot of a work in progress, originated by Mayo
 #define SIGN(a) ((a) < 0 ? -1 : 1)
 
 #define INV_2_POW_48 3.5527136788005009293556213378906e-15
+#define INV_2_POW_52 2.2204460492503130808472633361816e-16
 #define INV_2_POW_64 5.4210108624275221700372640043497e-20
+#define INV_2_POW_26 1.490116119384765625e-8
 #define INV_2_POW_32 2.3283064365386962890625e-10
 #define PI 3.1415926535897932384626433832795
 #define LN2 0.69314718055994530941723212145818
@@ -209,17 +223,24 @@ monty* monty_alloc(void);
 void monty_free(monty *mdata); 
 void monty_init_vec(monty *mdata, bignum * n, int verbose);
 int get_winsize(void);
+int get_bitwin(bignum* e, int bitloc, int winsize, int lane, int winmask);
 // 32-bit words, 16x
 int vec_montgomery_setup(bignum * a, bignum *r, bignum *rhat, base_t *rho);
 void vecmulmod(bignum *a, bignum *b, bignum *c, bignum *n, bignum *s, monty *mdata);
 void vecsqrmod(bignum *a, bignum *c, bignum *n, bignum *s, monty *mdata);
 void vecmodexp(bignum *d, bignum *b, bignum *e, bignum *m,
     bignum *s, bignum *one, monty *mdata);
+// 52-bit words, 8x
+int vec_montgomery_setup52(bignum * a, bignum *r, bignum *rhat, base_t *rho);
+void vecmulmod52(bignum *a, bignum *b, bignum *c, bignum *n, bignum *s, monty *mdata);
+void vecsqrmod52(bignum *a, bignum *c, bignum *n, bignum *s, monty *mdata);
+void vecmodexp52(bignum *d, bignum *b, bignum *e, bignum *m,
+    bignum *s, bignum *one, monty *mdata);
 
-void(*vecmulmod_ptr)(bignum *, bignum *, bignum *, bignum *, bignum *, monty *);
-void(*vecsqrmod_ptr)(bignum *, bignum *, bignum *, bignum *, monty *);
-int(*montsetup_ptr)(bignum *, bignum *, bignum *, base_t *);
-void(*vecmodexp_ptr)(bignum *, bignum *, bignum *, bignum *, bignum *, bignum *, monty *m);
+extern void(*vecmulmod_ptr)(bignum *, bignum *, bignum *, bignum *, bignum *, monty *);
+extern void(*vecsqrmod_ptr)(bignum *, bignum *, bignum *, bignum *, monty *);
+extern int(*montsetup_ptr)(bignum *, bignum *, bignum *, base_t *);
+extern void(*vecmodexp_ptr)(bignum *, bignum *, bignum *, bignum *, bignum *, bignum *, monty *m);
 
 // ============================================================================
 // vector bignum arithmetic and conversions
@@ -240,6 +261,16 @@ uint32_t vec_eq(base_t * u, base_t * v, int sz);
 uint32_t vec_bignum_mask_lshift_1(bignum * u, uint32_t wmask);
 void vec_bignum_mask_rshift_1(bignum * u, uint32_t wmask);
 void vec_bignum_mask_sub(bignum *a, bignum *b, bignum *c, uint32_t wmask);
+
+// ============================================================================
+// vector bignum52 arithmetic and conversions
+// ============================================================================
+int vec_montgomery_setup52(bignum * a, bignum *r, bignum *rhat, base_t *rho);
+void vec_bignum52_mask_sub(bignum *a, bignum *b, bignum *c, uint32_t wmask);
+void vec_bignum52_mask_rshift_1(bignum * u, uint32_t wmask);
+uint32_t vec_bignum52_mask_lshift_1(bignum * u, uint32_t wmask);
+uint32_t vec_eq52(base_t * u, base_t * v, int sz);
+uint32_t vec_gte52(bignum * u, bignum * v);
 
 // ---------------------------------------------------------------------
 // emulated instructions

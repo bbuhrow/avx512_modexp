@@ -217,6 +217,10 @@ void vecpmodtest(int do_verification, int threads, int verbose)
         else
             loc_iterations *= 100;
 
+#ifdef BASE52
+        loc_iterations *= 3;
+#endif
+
 #ifdef TARGET_KNL
         loc_iterations /= 3;
 #endif
@@ -238,22 +242,17 @@ void vecpmodtest(int do_verification, int threads, int verbose)
         for (i = 0; i < loc_iterations; i++)
         {
 
+#ifdef BASE52
+            //int tmp = ceil(MAXBITS / 64);
             memset(m->data, 0, MAXBITS * 2 * VECLEN / 8);
             memset(e->data, 0, MAXBITS * 2 * VECLEN / 8);
             memset(b->data, 0, MAXBITS * 2 * VECLEN / 8);
-            //memcpy(m->data, mod->_mp_d, MAXBITS * VECLEN / 8);
-            //memcpy(e->data, exp->_mp_d, MAXBITS * VECLEN / 8);
-            //memcpy(b->data, base->_mp_d, MAXBITS * VECLEN / 8);
 
             for (j = 0; j < VECLEN; j++)
             {
                 int k;
                 for (k = 0; k < NWORDS; k++)
                 {
-                    //m->data[k * VECLEN + j] &= MAXDIGIT;
-                    //b->data[k * VECLEN + j] &= MAXDIGIT;
-                    //e->data[k * VECLEN + j] &= MAXDIGIT;
-
                     uint64_t r1 = spRand64(&LCG_STATE[t]);
                     uint64_t r2 = spRand64(&LCG_STATE[t]);
                     uint64_t r3 = spRand64(&LCG_STATE[t]);
@@ -264,6 +263,26 @@ void vecpmodtest(int do_verification, int threads, int verbose)
                 }
             }
 
+#else
+            memset(m->data, 0, MAXBITS * 2 * VECLEN / 8);
+            memset(e->data, 0, MAXBITS * 2 * VECLEN / 8);
+            memset(b->data, 0, MAXBITS * 2 * VECLEN / 8);
+
+            for (j = 0; j < VECLEN; j++)
+            {
+                int k;
+                for (k = 0; k < NWORDS; k++)
+                {
+                    uint64_t r1 = spRand64(&LCG_STATE[t]);
+                    uint64_t r2 = spRand64(&LCG_STATE[t]);
+                    uint64_t r3 = spRand64(&LCG_STATE[t]);
+
+                    m->data[k * VECLEN + j] = r1 & MAXDIGIT;
+                    b->data[k * VECLEN + j] = r2 & MAXDIGIT;
+                    e->data[k * VECLEN + j] = r3 & MAXDIGIT;
+                }
+            }
+#endif
             for (j = 0; j < VECLEN; j++)
                 m->data[j] |= 0x1;
 
@@ -476,6 +495,10 @@ void vecmultest(int do_verification, int threads, int verbose)
         else
             loc_iterations *= 100;
 
+#ifdef BASE52
+        loc_iterations *= 3;
+#endif
+
 #ifdef TARGET_KNL
         loc_iterations /= 3;
 #endif
@@ -492,6 +515,8 @@ void vecmultest(int do_verification, int threads, int verbose)
             one->data[j] = 1;
         }
 
+#ifdef BASE52
+        //int tmp = ceil(MAXBITS / 64);
         memset(m->data, 0, MAXBITS * 2 * VECLEN / 8);
         memset(e->data, 0, MAXBITS * 2 * VECLEN / 8);
         memset(b->data, 0, MAXBITS * 2 * VECLEN / 8);
@@ -511,6 +536,26 @@ void vecmultest(int do_verification, int threads, int verbose)
             }
         }
 
+#else
+        memset(m->data, 0, MAXBITS * 2 * VECLEN / 8);
+        memset(e->data, 0, MAXBITS * 2 * VECLEN / 8);
+        memset(b->data, 0, MAXBITS * 2 * VECLEN / 8);
+
+        for (j = 0; j < VECLEN; j++)
+        {
+            int k;
+            for (k = 0; k < NWORDS; k++)
+            {
+                uint64_t r1 = spRand64(&LCG_STATE[t]);
+                uint64_t r2 = spRand64(&LCG_STATE[t]);
+                uint64_t r3 = spRand64(&LCG_STATE[t]);
+
+                m->data[k * VECLEN + j] = r1 & MAXDIGIT;
+                b->data[k * VECLEN + j] = r2 & MAXDIGIT;
+                e->data[k * VECLEN + j] = r3 & MAXDIGIT;
+            }
+        }
+#endif
         for (j = 0; j < VECLEN; j++)
             m->data[j] |= 0x1;
 
@@ -723,6 +768,10 @@ void vecsqrtest(int do_verification, int threads, int verbose)
         else
             loc_iterations *= 100;
 
+#ifdef BASE52
+        loc_iterations *= 3;
+#endif
+
 #ifdef TARGET_KNL
         loc_iterations /= 3;
 #endif
@@ -739,6 +788,8 @@ void vecsqrtest(int do_verification, int threads, int verbose)
             one->data[j] = 1;
         }
 
+#ifdef BASE52
+        //int tmp = ceil(MAXBITS / 64);
         memset(m->data, 0, MAXBITS * 2 * VECLEN / 8);
         memset(e->data, 0, MAXBITS * 2 * VECLEN / 8);
         memset(b->data, 0, MAXBITS * 2 * VECLEN / 8);
@@ -758,6 +809,26 @@ void vecsqrtest(int do_verification, int threads, int verbose)
             }
         }
 
+#else
+        memset(m->data, 0, MAXBITS * 2 * VECLEN / 8);
+        memset(e->data, 0, MAXBITS * 2 * VECLEN / 8);
+        memset(b->data, 0, MAXBITS * 2 * VECLEN / 8);
+
+        for (j = 0; j < VECLEN; j++)
+        {
+            int k;
+            for (k = 0; k < NWORDS; k++)
+            {
+                uint64_t r1 = spRand64(&LCG_STATE[t]);
+                uint64_t r2 = spRand64(&LCG_STATE[t]);
+                uint64_t r3 = spRand64(&LCG_STATE[t]);
+
+                m->data[k * VECLEN + j] = r1 & MAXDIGIT;
+                b->data[k * VECLEN + j] = r2 & MAXDIGIT;
+                e->data[k * VECLEN + j] = r3 & MAXDIGIT;
+            }
+        }
+#endif
         for (j = 0; j < VECLEN; j++)
             m->data[j] |= 0x1;
 
@@ -904,14 +975,13 @@ void vecsqrtest(int do_verification, int threads, int verbose)
 
 int main(int argc, char **argv)
 {
-    int i;
     int threads;
     int do_verification = 1;
     int verbose = 0;
 
     if (argc < 2)
     {
-        printf("usage: phi_modexp $threads $do_verification\n");
+        printf("usage: avx512_modexp $threads $do_verification\n");
         exit(1);
     }
     else if (argc == 3)
@@ -925,15 +995,21 @@ int main(int argc, char **argv)
         MAXBITS, DIGITBITS, NWORDS, VECLEN);
     printf("commencing modular exponentiation benchmarks\n"); fflush(stdout);
 
-
+#ifdef BASE52
+    vecmulmod_ptr = &vecmulmod52;
+    vecsqrmod_ptr = &vecsqrmod52;
+    montsetup_ptr = &vec_montgomery_setup52;
+    vecmodexp_ptr = &vecmodexp52;
+#else
     vecmulmod_ptr = &vecmulmod;
     vecsqrmod_ptr = &vecsqrmod;
     montsetup_ptr = &vec_montgomery_setup;
     vecmodexp_ptr = &vecmodexp;
+#endif
 
     omp_set_num_threads(threads);    
-    vecmultest(do_verification, threads, verbose);
-    vecsqrtest(do_verification, threads, verbose);
+    //vecmultest(do_verification, threads, verbose);
+    //vecsqrtest(do_verification, threads, verbose);
     vecpmodtest(do_verification, threads, verbose);
     
     return 0;

@@ -46,7 +46,7 @@
 
 
 #--------------------------- flags -------------------------
-CC = gcc
+CC = icc
 #CFLAGS = -g -march=core2 -mtune=core2
 #CFLAGS = -static
 #CFLAGS = -S -fsource-asm
@@ -54,9 +54,10 @@ WARN_FLAGS = -Wall #-W -Wconversion
 OPT_FLAGS = -O2
 INC = -I. 
 LIBS =
-BINNAME = phimodexp
-CFLAGS += -I../gmp-6.1.2/include/ 
-CFLAGS += -L../gmp-6.1.2/lib/ 
+BINNAME = avx512_modexp
+CFLAGS += -I../gmp_install/gmp-6.2.0/include/ 
+CFLAGS += -L../gmp_install/gmp-6.2.0/lib/ 
+CFLAGS += -g -gdwarf-4
 
 #--------------------------- make options -------------------------
 
@@ -67,7 +68,7 @@ ifeq ($(COMPILER),mingw)
 # -ffixed prevents them from being used at all.  The code benefits a lot from being
 # able to use all 32 zmm registers.
 	CC = gcc
-    BINNAME = phimodexp_mingw
+    BINNAME = avx512_modexp_mingw
 	CFLAGS += -fopenmp
     CFLAGS += -fcall-used-xmm16 -fcall-used-xmm17 -fcall-used-xmm18 -fcall-used-xmm19
     CFLAGS += -fcall-used-xmm20 -fcall-used-xmm21 -fcall-used-xmm22 -fcall-used-xmm23
@@ -76,12 +77,19 @@ ifeq ($(COMPILER),mingw)
 else ifeq ($(COMPILER),gcc730)
     CC = gcc-7.3.0
 	CFLAGS += -fopenmp 
+else ifeq ($(COMPILER),gcc11)
+    CC = gcc-11.1.0
+	CFLAGS += -fopenmp 
 else
 	CFLAGS += -qopenmp
 endif
 
 ifdef MAXBITS
 	CFLAGS += -DMAXBITS=$(MAXBITS)
+endif
+
+ifdef BASE52
+	CFLAGS += -DBASE52
 endif
 
 ifeq ($(KNL),1)
@@ -108,11 +116,7 @@ endif
 
 
 ifeq ($(CC),icc)
-	ifeq ($(KNL),1)
-		CFLAGS += -mkl
-	else
-		CFLAGS += -L/usr/lib/gcc/x86_64-redhat-linux/4.4.4 -L/lib -qopt-report=5 -mkl
-	endif
+	CFLAGS += -qmkl
 endif
 
 
@@ -134,6 +138,8 @@ endif
 	
 #--------------------------- file lists -------------------------
 SRCS = \
+	common.c \
+	vecarith52.c \
 	vecarith.c \
 	main.c 
 
